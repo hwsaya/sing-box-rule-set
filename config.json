@@ -1,1 +1,19 @@
-
+{
+  "tasks": [
+    {
+      "name": "browser",
+      "type": "local_compile",
+      "path": "rules/browser.json"
+    },
+    {
+      "name": "geoip-no-cn",
+      "type": "geoip_build"
+    },
+    {
+      "name": "adblocksingbox-no-cn",
+      "type": "srs_diff",
+      "full_url": "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksingbox.srs",
+      "lite_url": "https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblocksingboxlite.srs"
+    }
+  ]
+}
