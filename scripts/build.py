@@ -29,6 +29,34 @@ def optimize_cidrs(cidr_list):
     except Exception:
         return clean_ips
 
+def filter_rule_items(full_rules, lite_rules):
+    lite_items = {}
+    for r in lite_rules:
+        for k, v in r.items():
+            if isinstance(v, list):
+                lite_items.setdefault(k, set()).update(v)
+            else:
+                lite_items.setdefault(k, set()).add(v)
+
+    diff_rules = []
+    condition_keys = {"domain", "domain_suffix", "domain_keyword", "domain_regex", "geosite", "ip_cidr", "ip_cidr_ext"}
+    for r in full_rules:
+        new_rule = {}
+        for k, v in r.items():
+            if k in lite_items:
+                if isinstance(v, list):
+                    filtered = [x for x in v if x not in lite_items[k]]
+                    if filtered:
+                        new_rule[k] = filtered
+                elif v not in lite_items[k]:
+                    new_rule[k] = v
+            else:
+                new_rule[k] = v
+        
+        if any(k in new_rule for k in condition_keys):
+            diff_rules.append(new_rule)
+    return diff_rules
+
 def main():
     with open("config.json", "r", encoding='utf-8') as f:
         conf = json.load(f)
@@ -63,9 +91,9 @@ def main():
         elif t == "srs_diff":
             full = fetch_srs_as_json(task["full_url"], f"{name}_full")
             lite = fetch_srs_as_json(task["lite_url"], f"{name}_lite")
-            lite_raw = {json.dumps(r, sort_keys=True) for r in lite.get("rules", [])}
-            diff = [r for r in full.get("rules", []) if json.dumps(r, sort_keys=True) not in lite_raw]
-            full["rules"] = diff
+            
+            diff_rules = filter_rule_items(full.get("rules", []), lite.get("rules", []))
+            full["rules"] = diff_rules
             compile_data(full, name)
 
 if __name__ == "__main__":
