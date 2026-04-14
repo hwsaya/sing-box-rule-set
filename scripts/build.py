@@ -1,70 +1,52 @@
-import json
-import os
-import requests
-import subprocess
-import glob
-import ipaddress
+name: Build Rules
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+  push:
+    branches:
+      - main
 
-def run_cmd(cmd):
-    subprocess.run(cmd, shell=True, check=True)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # 核心修复：增加写入权限
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
 
-def fetch_srs_as_json(url, name):
-    resp = requests.get(url, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
 
-def compile_data(data, name):
-    temp_json = f"{name}_build.json"
-    with open(temp_json, "w", encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False)
-    run_cmd(f"sing-box rule-set compile --output output/{name}.srs {temp_json}")
-    if os.path.exists(temp_json):
-        os.remove(temp_json)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-def optimize_cidrs(cidr_list):
-    try:
-        networks = [ipaddress.ip_network(ip.strip()) for ip in set(cidr_list) if ip.strip()]
-        return [str(ip) for ip in ipaddress.collapse_addresses(networks)]
-    except Exception:
-        return list(set(cidr_list))
+      - name: Setup
+        run: |
+          pip install requests
+          LATEST=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep "browser_download_url.*linux-amd64.tar.gz" | cut -d '"' -f 4)
+          curl -sL "$LATEST" | tar -xz
+          sudo mv sing-box-*/sing-box /usr/local/bin/
+          go mod tidy
+          go build -o geoip-tool .
 
-def main():
-    with open("config.json", "r", encoding='utf-8') as f:
-        conf = json.load(f)
-    os.makedirs("output", exist_ok=True)
-    os.makedirs("geolite2", exist_ok=True)
+      - name: Run
+        run: python scripts/build.py
 
-    geo_urls = conf.get("metadata", {}).get("geolite2_urls", {})
-    for key, url in geo_urls.items():
-        dest = f"geolite2/{os.path.basename(url)}"
-        if not os.path.exists(dest):
-            r = requests.get(url, timeout=30)
-            r.raise_for_status()
-            with open(dest, "wb") as f: f.write(r.content)
-
-    for task in conf["tasks"]:
-        name, t = task["name"], task["type"]
-        if t == "local_compile":
-            run_cmd(f"sing-box rule-set compile --output output/{name}.srs {task['path']}")
-        elif t == "geoip_build":
-            if os.path.exists("./geoip-tool"):
-                for c in ["./geoip-tool convert config.json", "./geoip-tool convert", "./geoip-tool"]:
-                    try:
-                        run_cmd(c)
-                        break
-                    except: continue
-            raw_ips = []
-            for txt in glob.glob("output/text/*.txt"):
-                with open(txt, "r") as f: raw_ips.extend(f.readlines())
-            if raw_ips:
-                compile_data({"version": 1, "rules": [{"ip_cidr": optimize_cidrs(raw_ips)}]}, name)
-        elif t == "srs_diff":
-            full = fetch_srs_as_json(task["full_url"], f"{name}_full")
-            lite = fetch_srs_as_json(task["lite_url"], f"{name}_lite")
-            lite_raw = {json.dumps(r, sort_keys=True) for r in lite.get("rules", [])}
-            diff = [r for r in full.get("rules", []) if json.dumps(r, sort_keys=True) not in lite_raw]
-            full["rules"] = diff
-            compile_data(full, name)
-
-if __name__ == "__main__":
-    main()
+      - name: Push
+        run: |
+          cd output
+          # 确保清理掉 geoip 产生的中间文本目录，只保留 .srs
+          rm -rf text/
+          git init
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "Update $(date +%Y%m%d)" || exit 0
+          # 注意：这里我们使用 GitHub Actions 自动提供的环境变量，更安全
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git push -f origin release
