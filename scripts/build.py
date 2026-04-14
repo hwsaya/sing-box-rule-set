@@ -9,13 +9,16 @@ def run_cmd(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
 def fetch_srs_as_json(url, name):
-    resp = requests.get(url)
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
     srs_path = f"{name}_temp.srs"
     with open(srs_path, "wb") as f:
         f.write(resp.content)
-    res = subprocess.check_output(f"sing-box rule-set decompile {srs_path}", shell=True)
+    res = subprocess.check_output(f"sing-box rule-set decompile {srs_path}", shell=True).decode('utf-8').strip()
     if os.path.exists(srs_path):
         os.remove(srs_path)
+    if not res:
+        raise ValueError(f"Decompile returned empty result for {name}")
     return json.loads(res)
 
 def compile_data(data, name):
@@ -49,7 +52,8 @@ def main():
     for key, url in geo_urls.items():
         dest = f"geolite2/{os.path.basename(url)}"
         if not os.path.exists(dest):
-            r = requests.get(url)
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
             with open(dest, "wb") as f:
                 f.write(r.content)
 
@@ -62,7 +66,10 @@ def main():
 
         elif t == "geoip_build":
             if os.path.exists("./geoip-tool"):
-                run_cmd("./geoip-tool convert config.json")
+                try:
+                    run_cmd("./geoip-tool convert")
+                except:
+                    run_cmd("./geoip-tool")
             
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
@@ -70,7 +77,6 @@ def main():
                     raw_ips.extend(f.readlines())
             
             optimized_ips = optimize_cidrs(raw_ips)
-            
             geo_json = {
                 "version": 1,
                 "rules": [{"ip_cidr": optimized_ips}]
