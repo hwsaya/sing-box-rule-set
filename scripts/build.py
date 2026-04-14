@@ -14,10 +14,19 @@ def fetch_srs_as_json(url, name):
     srs_path = f"{name}_temp.srs"
     with open(srs_path, "wb") as f:
         f.write(resp.content)
-    res = subprocess.check_output(f"sing-box rule-set decompile {srs_path}", shell=True).decode('utf-8').strip()
+    
+    process = subprocess.run(f"sing-box rule-set decompile {srs_path}", shell=True, capture_output=True, text=True)
+    
     if os.path.exists(srs_path):
         os.remove(srs_path)
+        
+    if process.returncode != 0:
+        print(f"DEBUG - Sing-box error: {process.stderr}")
+        raise RuntimeError(f"Decompile failed for {name}")
+    
+    res = process.stdout.strip()
     if not res:
+        print(f"DEBUG - Sing-box stderr: {process.stderr}")
         raise ValueError(f"Decompile returned empty result for {name}")
     return json.loads(res)
 
@@ -67,9 +76,15 @@ def main():
         elif t == "geoip_build":
             if os.path.exists("./geoip-tool"):
                 try:
-                    run_cmd("./geoip-tool convert")
+                    run_cmd("./geoip-tool convert --config config.json")
                 except:
-                    run_cmd("./geoip-tool")
+                    try:
+                        run_cmd("./geoip-tool convert config.json")
+                    except:
+                        try:
+                            run_cmd("./geoip-tool convert")
+                        except:
+                            run_cmd("./geoip-tool")
             
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
