@@ -1,4 +1,11 @@
 {
+  "metadata": {
+    "geolite2_urls": {
+      "ipv4": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-Country-Blocks-IPv4.csv",
+      "ipv6": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-Country-Blocks-IPv6.csv",
+      "locations": "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-Country-Locations-en.csv"
+    }
+  },
   "tasks": [
     {
       "name": "browser",
