@@ -9,26 +9,34 @@ def run_cmd(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
 def fetch_srs_as_json(url, name):
-    resp = requests.get(url, timeout=30)
+    print(f"正在从 {url} 下载并反编译...")
+    resp = requests.get(url, timeout=60, stream=True)
     resp.raise_for_status()
     srs_path = f"{name}_temp.srs"
     with open(srs_path, "wb") as f:
-        f.write(resp.content)
+        for chunk in resp.iter_content(chunk_size=8192):
+            f.write(chunk)
     
+    size = os.path.getsize(srs_path)
+    print(f"文件下载完成，大小: {size} bytes")
+    
+    if size < 100:
+        raise ValueError(f"下载的文件 {name} 太小，可能不是有效的 srs 文件")
+
     process = subprocess.run(f"sing-box rule-set decompile {srs_path}", shell=True, capture_output=True, text=True)
     
     if os.path.exists(srs_path):
         os.remove(srs_path)
         
     if process.returncode != 0:
-        print(f"ERROR: {name} decompile failed: {process.stderr}")
-        raise RuntimeError(f"Decompile failed: {name}")
+        print(f"反编译失败 stderr: {process.stderr}")
+        raise RuntimeError(f"Decompile failed for {name}")
     
     res = process.stdout.strip()
     if not res:
-        print(f"ERROR: {name} decompile stdout is empty.")
-        print(f"STDERR: {process.stderr}")
-        raise ValueError(f"Decompile result empty: {name}")
+        # 如果 stdout 为空，尝试从 stderr 寻找原因
+        print(f"反编译结果为空。Sing-box stderr: {process.stderr}")
+        raise ValueError(f"Decompile returned empty result for {name}")
     
     return json.loads(res)
 
@@ -77,39 +85,31 @@ def main():
 
         elif t == "geoip_build":
             if os.path.exists("./geoip-tool"):
-                try:
-                    run_cmd("./geoip-tool convert --config config.json")
-                except:
+                # 尝试多种可能的命令格式
+                for cmd_var in ["./geoip-tool convert config.json", "./geoip-tool convert", "./geoip-tool"]:
                     try:
-                        run_cmd("./geoip-tool convert config.json")
+                        print(f"尝试执行: {cmd_var}")
+                        run_cmd(cmd_var)
+                        break
                     except:
-                        try:
-                            run_cmd("./geoip-tool convert")
-                        except:
-                            if os.path.exists("main.go"):
-                                run_cmd("go run main.go convert")
+                        continue
             
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
                 with open(txt, "r") as f:
                     raw_ips.extend(f.readlines())
             
-            optimized_ips = optimize_cidrs(raw_ips)
-            geo_json = {
-                "version": 1,
-                "rules": [{"ip_cidr": optimized_ips}]
-            }
-            compile_data(geo_json, name)
+            if raw_ips:
+                optimized_ips = optimize_cidrs(raw_ips)
+                geo_json = {"version": 1, "rules": [{"ip_cidr": optimized_ips}]}
+                compile_data(geo_json, name)
 
         elif t == "srs_diff":
             full = fetch_srs_as_json(task["full_url"], f"{name}_full")
             lite = fetch_srs_as_json(task["lite_url"], f"{name}_lite")
             
-            lite_rules_list = lite.get("rules", [])
-            lite_raw = {json.dumps(r, sort_keys=True) for r in lite_rules_list}
-            
-            full_rules_list = full.get("rules", [])
-            diff = [r for r in full_rules_list if json.dumps(r, sort_keys=True) not in lite_raw]
+            lite_raw = {json.dumps(r, sort_keys=True) for r in lite.get("rules", [])}
+            diff = [r for r in full.get("rules", []) if json.dumps(r, sort_keys=True) not in lite_raw]
             
             full["rules"] = diff
             compile_data(full, name)
