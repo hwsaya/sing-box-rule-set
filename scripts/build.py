@@ -22,11 +22,12 @@ def compile_data(data, name):
         os.remove(temp_json)
 
 def optimize_cidrs(cidr_list):
+    clean_ips = [ip.strip() for ip in set(cidr_list) if ip.strip()]
     try:
-        networks = [ipaddress.ip_network(ip.strip()) for ip in set(cidr_list) if ip.strip()]
+        networks = [ipaddress.ip_network(ip, strict=False) for ip in clean_ips]
         return [str(ip) for ip in ipaddress.collapse_addresses(networks)]
     except Exception:
-        return list(set(cidr_list))
+        return clean_ips
 
 def main():
     with open("config.json", "r", encoding='utf-8') as f:
@@ -55,7 +56,8 @@ def main():
                     except: continue
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
-                with open(txt, "r") as f: raw_ips.extend(f.readlines())
+                with open(txt, "r") as f:
+                    raw_ips.extend([line.strip() for line in f.readlines() if line.strip()])
             if raw_ips:
                 compile_data({"version": 1, "rules": [{"ip_cidr": optimize_cidrs(raw_ips)}]}, name)
         elif t == "srs_diff":
