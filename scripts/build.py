@@ -21,13 +21,15 @@ def fetch_srs_as_json(url, name):
         os.remove(srs_path)
         
     if process.returncode != 0:
-        print(f"DEBUG - Sing-box error: {process.stderr}")
-        raise RuntimeError(f"Decompile failed for {name}")
+        print(f"ERROR: {name} decompile failed: {process.stderr}")
+        raise RuntimeError(f"Decompile failed: {name}")
     
     res = process.stdout.strip()
     if not res:
-        print(f"DEBUG - Sing-box stderr: {process.stderr}")
-        raise ValueError(f"Decompile returned empty result for {name}")
+        print(f"ERROR: {name} decompile stdout is empty.")
+        print(f"STDERR: {process.stderr}")
+        raise ValueError(f"Decompile result empty: {name}")
+    
     return json.loads(res)
 
 def compile_data(data, name):
@@ -84,7 +86,8 @@ def main():
                         try:
                             run_cmd("./geoip-tool convert")
                         except:
-                            run_cmd("./geoip-tool")
+                            if os.path.exists("main.go"):
+                                run_cmd("go run main.go convert")
             
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
@@ -102,8 +105,11 @@ def main():
             full = fetch_srs_as_json(task["full_url"], f"{name}_full")
             lite = fetch_srs_as_json(task["lite_url"], f"{name}_lite")
             
-            lite_raw = {json.dumps(r, sort_keys=True) for r in lite.get("rules", [])}
-            diff = [r for r in full.get("rules", []) if json.dumps(r, sort_keys=True) not in lite_raw]
+            lite_rules_list = lite.get("rules", [])
+            lite_raw = {json.dumps(r, sort_keys=True) for r in lite_rules_list}
+            
+            full_rules_list = full.get("rules", [])
+            diff = [r for r in full_rules_list if json.dumps(r, sort_keys=True) not in lite_raw]
             
             full["rules"] = diff
             compile_data(full, name)
