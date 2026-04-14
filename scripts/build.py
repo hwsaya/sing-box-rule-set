@@ -29,33 +29,53 @@ def optimize_cidrs(cidr_list):
     except Exception:
         return clean_ips
 
-def filter_rule_items(full_rules, lite_rules):
-    lite_items = {}
-    for r in lite_rules:
-        for k, v in r.items():
-            if isinstance(v, list):
-                lite_items.setdefault(k, set()).update(v)
-            else:
-                lite_items.setdefault(k, set()).add(v)
-
-    diff_rules = []
+def get_lite_values(rules):
+    lite_values = set()
     condition_keys = {"domain", "domain_suffix", "domain_keyword", "domain_regex", "geosite", "ip_cidr", "ip_cidr_ext"}
-    for r in full_rules:
+    def _extract(r_list):
+        for r in r_list:
+            if "rules" in r and isinstance(r["rules"], list):
+                _extract(r["rules"])
+            for k, v in r.items():
+                if k in condition_keys:
+                    if isinstance(v, list):
+                        lite_values.update(str(x).strip().lstrip('.') for x in v)
+                    else:
+                        lite_values.add(str(v).strip().lstrip('.'))
+    _extract(rules)
+    return lite_values
+
+def filter_rules(rules, lite_values):
+    condition_keys = {"domain", "domain_suffix", "domain_keyword", "domain_regex", "geosite", "ip_cidr", "ip_cidr_ext"}
+    diff = []
+    for r in rules:
         new_rule = {}
+        has_condition = False
         for k, v in r.items():
-            if k in lite_items:
+            if k == "rules" and isinstance(v, list):
+                filtered_sub = filter_rules(v, lite_values)
+                if filtered_sub:
+                    new_rule[k] = filtered_sub
+                    has_condition = True
+            elif k in condition_keys:
                 if isinstance(v, list):
-                    filtered = [x for x in v if x not in lite_items[k]]
+                    filtered = [x for x in v if str(x).strip().lstrip('.') not in lite_values]
                     if filtered:
                         new_rule[k] = filtered
-                elif v not in lite_items[k]:
+                        has_condition = True
+                elif str(v).strip().lstrip('.') not in lite_values:
                     new_rule[k] = v
+                    has_condition = True
             else:
                 new_rule[k] = v
-        
-        if any(k in new_rule for k in condition_keys):
-            diff_rules.append(new_rule)
-    return diff_rules
+                
+        if "type" in new_rule and new_rule["type"] == "logical":
+            if "rules" in new_rule and new_rule["rules"]:
+                diff.append(new_rule)
+        elif has_condition:
+            diff.append(new_rule)
+            
+    return diff
 
 def main():
     with open("config.json", "r", encoding='utf-8') as f:
@@ -92,7 +112,15 @@ def main():
             full = fetch_srs_as_json(task["full_url"], f"{name}_full")
             lite = fetch_srs_as_json(task["lite_url"], f"{name}_lite")
             
-            diff_rules = filter_rule_items(full.get("rules", []), lite.get("rules", []))
+            # 提取特征池
+            lite_values = get_lite_values(lite.get("rules", []))
+            print(f"[{name}] 提取到 Lite 规则条件数量: {len(lite_values)}")
+            
+            # 执行过滤
+            full_rules_len = len(full.get("rules", []))
+            diff_rules = filter_rules(full.get("rules", []), lite_values)
+            print(f"[{name}] 完整规则条数: {full_rules_len} -> 过滤后条数: {len(diff_rules)}")
+            
             full["rules"] = diff_rules
             compile_data(full, name)
 
