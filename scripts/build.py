@@ -62,7 +62,7 @@ def main():
 
         elif t == "geoip_build":
             if os.path.exists("./geoip-tool"):
-                run_cmd("./geoip-tool convert -c config.json")
+                run_cmd("./geoip-tool convert --config config.json")
             
             raw_ips = []
             for txt in glob.glob("output/text/*.txt"):
