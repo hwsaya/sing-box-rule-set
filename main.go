@@ -2,12 +2,10 @@ package main
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -37,8 +35,8 @@ func init() {
 }
 
 func runConvert() error {
-	os.makedirs(outputDir, 0755)
-	
+	os.MkdirAll(outputDir, 0755)
+
 	locations, err := loadLocations(filepath.Join(inputDir, "GeoLite2-Country-Locations-en.csv"))
 	if err != nil {
 		return err
@@ -61,7 +59,7 @@ func loadLocations(path string) (map[string]bool, error) {
 
 	cnIds := make(map[string]bool)
 	r := csv.NewReader(f)
-	r.Read() // skip header line
+	r.Read()
 	for {
 		record, err := r.Read()
 		if err == io.EOF {
