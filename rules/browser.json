@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "package_name": [
+        "com.android.chrome",
+        "org.mozilla.firefox",
+        "com.microsoft.emmx",
+        "com.opera.browser",
+        "com.opera.mini.native",
+        "com.brave.browser",
+        "com.vivaldi.browser",
+        "com.sec.android.app.sbrowser",
+        "com.UCMobile.intl",
+        "com.UCMobile",
+        "com.tencent.mtt",
+        "com.duckduckgo.mobile.android",
+        "com.kiwibrowser.browser",
+        "com.android.browser",
+        "org.mozilla.focus",
+        "com.mi.globalbrowser",
+        "com.miui.browser",
+        "com.huawei.browser",
+        "com.huawei.hwwebview",
+        "com.coloros.browser",
+        "com.heytap.browser",
+        "com.vivo.browser",
+        "com.realme.browser",
+        "com.oneplus.browser",
+        "com.oppo.browser",
+        "com.lenovo.browser",
+        "com.zui.browser",
+        "com.transsion.browser",
+        "com.ecosia.android",
+        "org.torproject.torbrowser",
+        "mark.via.gp",
+        "mark.via",
+        "sogou.mobile.explorer",
+        "com.baidu.browser.apps",
+        "com.qihoo.browser",
+        "com.ijinshan.browser_fast",
+        "com.quark.browser",
+        "com.mx.browser",
+        "com.browser2345",
+        "com.dolphin.browser",
+        "com.jumang.bobo"
+      ]
+    }
+  ]
+}
