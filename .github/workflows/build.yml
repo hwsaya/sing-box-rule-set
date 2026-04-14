@@ -9,7 +9,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -35,13 +37,13 @@ jobs:
 
       - name: Push
         run: |
-          cd output
+          cd output          
           rm -rf text/
           git init
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b release
           git add .
-          git commit -m "Update $(date +%Y%m%d)" || exit 0
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git commit -m "Update $(date +%Y%m%d)" || exit 0          
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f origin release
